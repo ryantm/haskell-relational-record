@@ -211,10 +211,14 @@ defineColumns recTypeName cols = do
 -- | Make column projection path and constraint key templates using default naming rule.
 defineColumnsDefault :: ConName                          -- ^ Record type name
                      -> [((String, TypeQ), Maybe TypeQ)] -- ^ Column info list
+                     -> NameConfig
                      -> Q [Dec]                          -- ^ Column projection path declarations
-defineColumnsDefault recTypeName cols =
+defineColumnsDefault recTypeName cols nmconfig =
   defineColumns recTypeName [((varN n, ct), fmap (withCName n) mayC) | ((n, ct), mayC) <- cols]
-  where varN      name   = varCamelcaseName (name ++ "'")
+  where varN      name   = if overloadedRecords nmconfig then
+                             varCamelcaseName ((nameBase $ conName recTypeName) ++ name ++ "'")
+                           else
+                             varCamelcaseName (name ++ "'")
         withCName name t = (t, varCamelcaseName ("constraint_key_" ++ name))
 
 -- | Rule template to infer table derivations.
@@ -335,7 +339,7 @@ defineTableTypesWithConfig config schema table columns = do
              (recordType recConfig schema table)
              (tableSQL (normalizedTableName config) (schemaNameMode config) schema table)
              (map (fst . fst) columns)
-  colsDs <- defineColumnsDefault (recordTypeName recConfig schema table) columns
+  colsDs <- defineColumnsDefault (recordTypeName recConfig schema table) columns nmconfig
   return $ tableDs ++ colsDs
 
 {-# DEPRECATED defineTableTypesDefault "Use defineTableTypesWithConfig instead of this." #-}
@@ -518,7 +522,8 @@ makeRelationalRecordDefault recTypeName = do
   cs <- maybe
         (return [])
         (\ns -> defineColumnsDefault recTypeConName
-                [ ((nameBase n, ct), Nothing) | n  <- ns  | ct <- cts ])
+                [ ((nameBase n, ct), Nothing) | n  <- ns  | ct <- cts ]
+                (nameConfig defaultConfig))
         mayNs
   pc <- defineProductConstructorInstance tyCon dataCon cts
   return $ concat [pw, cs, pc]

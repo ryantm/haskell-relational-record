@@ -98,6 +98,7 @@ data NameConfig =
   NameConfig
   { recordConfig       ::  RecordTH.NameConfig
   , relationVarName    ::  String -> String -> VarName
+  , overloadedRecords  :: Bool
   }
 
 instance Show NameConfig where
@@ -130,6 +131,7 @@ defaultConfig =
          , verboseAsCompilerWarning  =  False
          , nameConfig                =  NameConfig { recordConfig     =  RecordTH.defaultNameConfig
                                                    , relationVarName  =  const varCamelcaseName
+                                                   , overloadedRecords = False
                                                    }
          }
 
