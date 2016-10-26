@@ -8,6 +8,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeInType #-}
 
 -- |
 -- Module      : Database.Relational.Query.TH
@@ -100,7 +101,7 @@ import Database.Relational.Query
    relationalQuerySQL, Query, relationalQuery, KeyUpdate,
    Insert, derivedInsert, InsertQuery, derivedInsertQuery,
    HasConstraintKey(constraintKey), Primary, NotNull, primary, primaryUpdate)
-import qualified Database.Relational.Query ((!))
+import qualified Database.Relational.Query ((!), (?!), (?!?))
 
 import Database.Relational.Query.Scalar (defineScalarDegree)
 import Database.Relational.Query.Constraint (Key, unsafeDefineConstraintKey)
@@ -238,9 +239,20 @@ defineOverloadedLabel :: ConName                                    -- ^ Record 
                       -> Q [Dec]                                    -- ^ Column projection path declarations
 defineOverloadedLabel recTypeName ((n, renamedN,t),_) =
   let name = litT $ strTyLit $ nameBase $ varName n
+      name' = litT $ strTyLit $ (nameBase $ varName n) ++ "'"
       internalProjection = varE $ varName renamedN
-  in
-    [d| instance Has (Projection a $(toTypeCon recTypeName)) $name (Projection a $t) where from row _ = row Database.Relational.Query.! $(internalProjection) |]
+      may = ''Maybe
+  in do
+    t' <- t
+    case t' of
+      (AppT (ConT may) _) ->
+        [d| instance Has (Projection a $(toTypeCon recTypeName)) $name (Projection a $t) where from row _ = row Database.Relational.Query.! $(internalProjection)
+            instance Has (Projection a (Maybe $(toTypeCon recTypeName))) $name (Projection a $t) where from row _ = row Database.Relational.Query.?!? $(internalProjection)
+            instance Has (Projection a (Maybe $(toTypeCon recTypeName))) $name' (Projection a (Maybe $t)) where from row _ = row Database.Relational.Query.?! $(internalProjection) |]
+      _ ->
+        [d| instance Has (Projection a $(toTypeCon recTypeName)) $name (Projection a $t) where from row _ = row Database.Relational.Query.! $(internalProjection)
+            instance Has (Projection a (Maybe $(toTypeCon recTypeName))) $name (Projection a (Maybe $t)) where from row _ = row Database.Relational.Query.?! $(internalProjection) |]
+
 
 -- | Make column projection path and constraint key templates using default naming rule.
 defineColumnsDefault :: ConName                          -- ^ Record type name
