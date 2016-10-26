@@ -81,7 +81,7 @@ import Data.Array.IArray ((!))
 
 import Language.Haskell.TH
   (Name, nameBase, Q, reify, TypeQ, Type (AppT, ConT), ExpQ,
-   tupleT, appT, arrowT, Dec (..), stringE, listE, newName, litT, strTyLit, varE)
+   tupleT, appT, arrowT, Dec (..), stringE, listE, litE, stringL, newName, litT, strTyLit, varE, Pat (..))
 import Language.Haskell.TH.Compat.Reify (unVarI)
 import Language.Haskell.TH.Name.CamelCase
   (VarName, varName, ConName (ConName), conName, varNameWithPrefix, varCamelcaseName, toVarExp, toTypeCon, toDataCon)
@@ -253,6 +253,12 @@ defineOverloadedLabel recTypeName ((n, renamedN,t),_) =
         [d| instance Has (Projection a $(toTypeCon recTypeName)) $name (Projection a $t) where from row _ = row Database.Relational.Query.! $(internalProjection)
             instance Has (Projection a (Maybe $(toTypeCon recTypeName))) $name (Projection a (Maybe $t)) where from row _ = row Database.Relational.Query.?! $(internalProjection) |]
 
+defineColumnsList :: ConName -> [String] -> Q [Dec]
+defineColumnsList recTypeName columns =
+  let n = pure $ VarP (varName $ "columns" `varNameWithPrefix` (nameBase $ conName recTypeName))
+      c = listE (fmap (litE . stringL) columns)
+  in
+    [d| $n = $c |]
 
 -- | Make column projection path and constraint key templates using default naming rule.
 defineColumnsDefault :: ConName                          -- ^ Record type name
@@ -263,7 +269,8 @@ defineColumnsDefault recTypeName cols nmconfig = do
   ds <- defineColumns recTypeName columnInfoList
   if overloadedRecords nmconfig then do
     ls <- defineOverloadedLabels recTypeName overloadedRecordsColumnInfoList
-    pure $ ds ++ ls
+    cl <- defineColumnsList recTypeName (fmap (\((a,_),_) -> a) cols)
+    pure $ ds ++ ls ++ cl
   else
     pure ds
   where
